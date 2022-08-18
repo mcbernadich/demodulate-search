@@ -1,0 +1,1119 @@
+#!/usr/bin/env python3
+#################### ALESSANDRO RIDOLFI ########################
+
+import sys
+import os
+import os.path
+import copy
+import time
+import multiprocessing
+import subprocess
+import numpy as np
+import scipy
+import scipy.optimize
+import scipy.interpolate
+
+
+dict_param_formatters = {'PSR': "{:<17s}", 'PSRJ': "{:<17s}", 'RAJ': "{:<9s}", 'DECJ': "{:<9s}", 'PMRA': "{:<19s}", 'PMDEC': "{:<19s}", 'PX': "{:<20s}", 'F0': "{:<6s}", 'F1': "{:<8s}", 'F2': "{:<8s}", 'F3': "{:<8s}", 'F4': "{:<8s}", 'F5': "{:<8s}", 'PEPOCH': "{:<14s}", 'START': "{:<17s}", 'FINISH': "{:<17s}", 'DM': "{:<17s}", 'DMEPOCH': "{:<15s}", 'SOLARN0': "{:<21s}", 'EPHEM': "{:<20s}", 'CLK': "{:<20s}", 'UNITS': "{:<20s}", 'TIMEEPH': "{:<20s}", 'T2CMETHOD': "{:<20s}", 'CORRECT_TROPOSPHERE': "{:<20s}", 'PLANET_SHAPIRO': "{:<20s}", 'DILATEFREQ': "{:<20s}", 'NTOA': "{:<23s}", 'TRES': "{:<21s}", 'TZRMJD': "{:<8s}", 'TZRFRQ': "{:<18s}", 'TZRSITE': "{:<25s}",
+                            'NITS': "{:<23s}", 'IBOOT': "{:<22s}", 'BINARY': "{:<18s}", 'A1': "{:<15s}", 'E': "{:<14s}", 'ECC': "{:<14s}", 'T0': "{:<10s}",  'TASC': "{:<10s}", 'OM': "{:<10s}", 'PB': "{:<12s}", 'FB0': "{:<7s}", 'FB1': "{:<7s}", 'FB2': "{:<7s}", 'FB3': "{:<7s}", 'FB4': "{:<7s}", 'FB5': "{:<7s}", 'FB6': "{:<7s}", 'FB7': "{:<7s}", 'FB8': "{:<7s}", 'FB9': "{:<7s}", 'FB10': "{:<7s}", 'FB11': "{:<7s}", 'FB12': "{:<7s}", 'FB13': "{:<7s}", 'GAMMA': "{:<17s}", 'PBDOT': "{:<17s}", 'XPBDOT': "{:<17s}", 'OMDOT': "{:<17s}", 'SINI': "{:<18s}", 'MTOT': "{:<18s}", 'M2': "{:<18s}", 'EPS1': "{:<18s}", 'EPS2': "{:<18s}", 'DTHETA': "{:<18s}", 'DR': "{:<18s}", 'XDOT': "{:<18s}", 'EDOT': "{:<18s}"}
+
+list_ordered_params_general = ['PSR', 'PSRJ', 'RAJ',  'DECJ', 'PMRA', 'PMDEC', 'LAMBDA', 'BETA', 'PMLAMBDA', 'PMBETA', 'PX', 'F0',   'F1',   'F2',   'F3',   'F4',   'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',  'PEPOCH', 'START', 'FINISH', 'DM', 'GLEP_1', 'GLPH_1', 'GLF0_1', 'GLF1_1', 'GLF0D_1', 'GLTD_1', 'GLEP_2', 'GLPH_2', 'GLF0_2', 'GLF1_2', 'GLF0D_2', 'GLTD_2', 'GLEP_3', 'GLPH_3', 'GLF0_3', 'GLF1_3', 'GLF0D_3', 'GLTD_3', 'DMEPOCH', 'SOLARN0', 'EPHEM', 'CLK', 'UNITS', 'TIMEEPH', 'T2CMETHOD', 'CORRECT_TROPOSPHERE', 'PLANET_SHAPIRO', 'DILATEFREQ', 'NTOA', 'TRES', 'TZRMJD', 'TZRFRQ', 'TZRSITE', 'NITS', 'IBOOT']
+
+list_ordered_params_general_T2 = ['PSRJ',  'RAJ',  'DECJ', 'PMRA', 'PMDEC',  'LAMBDA', 'BETA', 'PMLAMBDA', 'PMBETA',  'PX', 'F0',   'F1',   'F2',   'F3',   'F4',   'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12', 'PEPOCH', 'POSEPOCH', 'DMEPOCH',   'START', 'FINISH', 'DM', 'GLEP_1', 'GLPH_1', 'GLF0_1', 'GLF1_1', 'GLF0D_1', 'GLTD_1', 'GLEP_2', 'GLPH_2', 'GLF0_2', 'GLF1_2', 'GLF0D_2', 'GLTD_2', 'GLEP_3', 'GLPH_3', 'GLF0_3', 'GLF1_3', 'GLF0D_3', 'GLTD_3' 'NE_SW', 'EPHEM', 'CLK', 'UNITS', 'TIMEEPH', 'T2CMETHOD', 'CORRECT_TROPOSPHERE', 'PLANET_SHAPIRO', 'DILATEFREQ', 'NTOA', 'TRES', 'TZRMJD', 'TZRFRQ', 'TZRSITE', 'NITS', 'IBOOT']
+
+list_ordered_params_general_no_PSR = ['RAJ',  'DECJ', 'PMRA', 'PMDEC',  'LAMBDA', 'BETA', 'PMLAMBDA', 'PMBETA', 'PX', 'F0', 'F1',   'F2',   'F3',   'F4',   'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',  'PEPOCH',   'START', 'FINISH', 'DM', 'GLEP_1', 'GLPH_1', 'GLF0_1', 'GLF1_1', 'GLF0D_1', 'GLTD_1', 'GLEP_2', 'GLPH_2', 'GLF0_2', 'GLF1_2', 'GLF0D_2', 'GLTD_2', 'GLEP_3', 'GLPH_3', 'GLF0_3', 'GLF1_3', 'GLF0D_3', 'GLTD_3',  'DMEPOCH',   'SOLARN0', 'EPHEM', 'CLK', 'UNITS', 'TIMEEPH', 'T2CMETHOD', 'CORRECT_TROPOSPHERE', 'PLANET_SHAPIRO', 'DILATEFREQ', 'NTOA', 'TRES', 'TZRMJD', 'TZRFRQ', 'TZRSITE', 'NITS', 'IBOOT']
+
+list_ordered_params_binary = ['BINARY', 'A1',   'E', 'ECC', 'OM',  'T0',   'EPS1', 'EPS2', 'TASC', 'OMDOT', 'PB', 'PBDOT', 'XPBDOT', 'FB0', 'FB1',   'FB2', 'FB3',   'FB4',   'FB5',   'FB6',   'FB7',   'FB8',   'FB9', 'FB10', 'FB11', 'FB12', 'FB13', 'GAMMA', 'SINI', 'MTOT', 'M2', 'XDOT', 'EDOT', 'DTHETA', 'DR']
+
+list_ordered_params_binary_T2 = ['BINARY', 'A1', 'ECC',  'OM',  'T0',  'EPS1', 'EPS2',  'TASC', 'OMDOT', 'PB', 'PBDOT', 'XPBDOT', 'FB0', 'FB1',   'FB2', 'FB3',   'FB4',   'FB5',   'FB6',   'FB7',   'FB8',   'FB9', 'FB10', 'FB11', 'FB12', 'FB13', 'GAMMA', 'SINI', 'MTOT', 'M2', 'XDOT', 'EDOT', 'DTHETA', 'DR']
+
+
+def deconvolve_binary_signal_eccentric_orbit_SUPERFAST(t, y, Pb_s, x_p_lts, omega_p, ecc, T0, Mp_g, gamma_p_s, dR, dTheta, Shapiro_Range_p, Shapiro_Shape, Tstart, list_q, ncpus=1, list_components_to_demodulate=['pulsar', 'companion']):
+        ##################################################################
+        N_samples_orbit_original = 100000
+        N_samples_orbit = int(N_samples_orbit_original /
+                                 np.float(ncpus) + 1)*ncpus  # find multiple of cpus
+        input_array_M_frac_p = np.linspace(0, 1, N_samples_orbit)
+        
+        my_queue = multiprocessing.Queue()
+        my_processes = []
+        list_result_program = []
+        list_arrays_M_frac_p = []
+        N_samples_per_cpu = int(N_samples_orbit / ncpus)
+        
+        for n in range(ncpus+1):  # the last array in the list will be shorter than the others
+                list_arrays_M_frac_p.append(
+                        input_array_M_frac_p[n*N_samples_per_cpu:(n+1)*N_samples_per_cpu])
+
+        for n in range(ncpus):
+                my_processes.append(multiprocessing.Process(
+                target=multiprocessing_mean_to_true_anomaly_FRAC, args=(ecc, list_arrays_M_frac_p[n], my_queue, n)))
+        for p in my_processes:
+                p.start()
+                time.sleep(0.01)
+
+        for i in range(len(my_processes)):
+                list_result_program += my_queue.get(block=True)
+
+        list_result_program_sorted = sorted(list_result_program, key=lambda k: k['id_num'], reverse=False)
+        list_arrays = [list_result_program_sorted[k]['data']  for k in range(len(list_result_program_sorted))]
+        
+        input_array_T_frac_p = np.concatenate(list_arrays)
+        input_array_T_p = input_array_T_frac_p * 2*np.pi
+        input_array_E_p = np.array([true_to_eccentric_anomaly(ecc, x) for x in input_array_T_p])
+        ##########################################
+
+        x, y1, y2 = input_array_M_frac_p, input_array_T_p, input_array_E_p
+
+        funcT = scipy.interpolate.interp1d(x, y1)
+        funcE = scipy.interpolate.interp1d(x, y2)
+        
+        ######################################################################
+        # Now I consider the real data
+        
+        N_orbits = (1./Pb_s) * ((Tstart - T0)*86400)
+        
+        array_M_frac_p = np.modf(t/Pb_s)[0]
+        
+        array_true_anomalies_p = funcT(array_M_frac_p)
+        array_eccentric_anomalies_p = funcE(array_M_frac_p)
+        
+        array_Einstein_delays_p = gamma_p_s * np.sin(array_eccentric_anomalies_p)
+        
+        array_Shapiro_delays_p = - 2 * Shapiro_Range_p * np.log10(1 - ecc*np.cos(array_eccentric_anomalies_p) - Shapiro_Shape*(np.sin(omega_p)*(np.cos(array_eccentric_anomalies_p) - ecc) + np.sqrt(1 - ecc**2)*np.cos(omega_p)*np.sin(array_eccentric_anomalies_p)))
+        
+        ecc_R = ecc * (1 + dR)
+        ecc_T = ecc * (1 + dTheta)
+        array_roemer_delays_p_classic = x_p_lts * (1 - np.power(ecc, 2.)) / (1. + ecc*np.cos(array_true_anomalies_p)) * np.sin(array_true_anomalies_p+omega_p)
+        # Eq. (8.36) Lorimer & Kramer 2004
+        array_roemer_delays_p = x_p_lts * (np.cos(array_eccentric_anomalies_p) - ecc_R)*np.sin(omega_p) + x_p_lts*np.sin(array_eccentric_anomalies_p)*np.sqrt(1 - ecc_T**2)*np.cos(omega_p)
+        N_samples_deconv = len(array_roemer_delays_p)
+        
+        if 'pulsar' in list_components_to_demodulate:
+                ts_deconvolved_p = t[:N_samples_deconv] - array_roemer_delays_p - array_Einstein_delays_p - array_Shapiro_delays_p
+        else:
+                ts_deconvolved_p = []
+
+        return array_eccentric_anomalies_p, array_roemer_delays_p, ts_deconvolved_p, y
+
+
+def get_command_output(command):
+        list_for_Popen = command.split()
+        proc = subprocess.Popen(list_for_Popen, stdout=subprocess.PIPE)
+        out, err = proc.communicate()
+        return out.decode('ascii')
+
+
+def write_parfile_formatted(dict_parfile, list_parameters_to_fit, outname):
+        f_parfile = open(outname, "w")
+        for k in list_ordered_params_general + list_ordered_params_binary:
+                if k in list(dict_parfile.keys()):
+                        string = dict_param_formatters[k].format(k) + str(dict_parfile[k])
+
+                        if k in list_parameters_to_fit:
+                                string = string + " 1\n"
+                        else:
+                                string = string + "\n"
+                        string = string.replace("e-", "D-")
+                        string = string.replace("e+", "D+")
+                        f_parfile.write(string)
+
+        f_parfile.close()
+         
+
+def import_parfile(infile):
+        parfile = open(infile, "r")
+        dict_parfile = {}
+        
+        for line in parfile:
+                if line != "\n":
+                        split_line = line.split()
+                        dict_parfile[split_line[0]] = split_line[1]
+                        if "D-" in dict_parfile[split_line[0]]:
+                                dict_parfile[split_line[0]] = dict_parfile[split_line[0]].replace("D-", "e-")
+        return dict_parfile
+
+
+def make_with_even_number_of_samples(array):
+        # print "Checking if the time series has an even number of points..."
+        if len(array) % 2 == 0:
+                # print "Ok, the array s has %d samples, which is divisible by 2!" % len(array)
+                return array
+        else:
+                # print "Mmm, the deconvolved time series has %d samples, which is NOT divisible by 2!" % len(array)
+                # print "Then I will remove 1 sample..."
+                return array[:-1]
+
+
+def Einstein_delay(Mp_Msun, Mc_Msun, Pb_s, ecc):
+        T_SUN_CGS = 4.925490947e-6                  # G*M_SUN_CGS/(LIGHT_SPEED**3)
+        return np.power(T_SUN_CGS, 2./3.) * np.power(Pb_s/(2.*np.pi), 1./3.) * ecc * (Mc_Msun*(Mp_Msun + 2*Mc_Msun) / np.power(Mp_Msun + Mc_Msun, 4./3.))
+
+
+def calculate_relativistic_deformation_of_orbit_dR_in_seconds(Pb_d, Mp_Msun, Mc_Msun):
+        T_SUN_CGS = 4.925490947e-6
+        Pb_s = Pb_d*86400.
+
+        dR_s      = T_SUN_CGS**(2./3.)   * ( (2*np.pi/Pb_s)**(2./3.) )  * ( (3      *Mp_Msun**2  +  6*Mp_Msun*Mc_Msun + 2*Mc_Msun**2) / ((Mp_Msun + Mc_Msun)**(4./3.)  )         )
+        return dR_s
+
+def calculate_relativistic_deformation_of_orbit_dTheta_in_seconds(Pb_d, Mp_Msun, Mc_Msun):
+        T_SUN_CGS = 4.925490947e-6
+        Pb_s = Pb_d*86400.
+
+        dTheta_s  = T_SUN_CGS**(2./3.)   * ( (2*np.pi/Pb_s)**(2./3.) )  * ( ((7./2.)*Mp_Msun**2  +  6*Mp_Msun*Mc_Msun + 2*Mc_Msun**2) / ((Mp_Msun + Mc_Msun)**(4./3.)  )         )
+        return dTheta_s
+
+
+def multiprocessing_mean_to_true_anomaly_FRAC(ecc, array_M, queue_object, id_num):
+        queue_object.put([{'data': mean_to_true_anomaly_FRAC(ecc, array_M), 'id_num': id_num}])
+
+
+def mean_to_true_anomaly_FRAC(ecc, array_M):
+        array_E = solve_mean_to_eccentric_FRAC_numpy(ecc, array_M)
+        array_T = 2.*np.arctan(np.sqrt((1.+ecc)/(1.-ecc))*np.tan(array_E/2.))
+        
+        mask = array_T < 0
+        array_T[mask] = array_T[mask] + 2*np.pi
+        
+        return array_T / (2*np.pi)  # return fractional
+
+
+def func_y(x, ecc, M):
+        return x - ecc*np.sin(x) - M
+
+
+def func_y_derivative(x, ecc, M):
+        return 1 - ecc*np.cos(x)
+
+
+def func_y_second_derivative(x, ecc, M):
+        return ecc*np.sin(x)
+
+
+def solve_true_to_mean_anomaly_FRAC(ecc, T):
+        T = T * 2*np.pi
+
+        E = np.arcsin(np.sqrt(1 - np.power(ecc, 2)) *   np.sin(T) / (1 + ecc*np.cos(T)))
+
+        M = E - ecc*np.sin(E)
+        return M / (2*np.pi)
+
+
+def solve_eccentric_to_mean_anomaly_FRAC(ecc, E):
+        E = E * 2*np.pi
+        M = E - ecc*np.sin(E)
+        
+        return M / (2*np.pi)
+
+
+def solve_mean_to_eccentric_FRAC_numpy(ecc, array_M):
+        array_M = array_M * (2*np.pi)
+        array_E = np.array([scipy.optimize.newton(func=func_y, x0=M, fprime=func_y_derivative, args=(ecc, M), tol=1.0e-8, maxiter=500) for M in array_M])
+        
+        return array_E
+
+
+def solve_mean_to_eccentric_FRAC(ecc, M):
+        E_min = 0  # all fractional
+        M = M * (2*np.pi)  # convert from fractional to rad
+        
+        x_n1 = E_min
+        x_n = E_min + 1
+        count = 0
+        while (abs(x_n1 - x_n) > 1.0e-4):
+                count = count + 1
+                x_n = x_n1
+                y_xn = x_n - ecc*np.sin(x_n) - M
+                y_derivative_xn = 1 - ecc*np.cos(x_n)
+                
+                x_n1 = x_n - (y_xn / y_derivative_xn)
+                
+        return x_n1/(2*np.pi)  # return fractional
+        
+
+def true_to_eccentric_anomaly(ecc, T):
+        if (T > -np.pi and T < 0):
+                E = - np.arccos((ecc + np.cos(T)) / (1+ecc*np.cos(T)))
+        elif (T >= 0 and T <= np.pi):
+                E = np.arccos((ecc + np.cos(T)) / (1+ecc*np.cos(T)))
+        elif (T > np.pi):
+                E = 2*np.pi - np.arccos((ecc + np.cos(T)) / (1+ecc*np.cos(T)))
+        elif (T < -np.pi):
+                E = - 2*np.pi +  (np.arccos((ecc + np.cos(2*np.pi - T)) / (1+ecc*np.cos(2*np.pi - T))))
+                
+        return E
+
+
+def write_inf_file(basename, source_name, DM, Tstart, dt, Nsamples, RAJ, DECJ):
+        inf_file = open("%s.inf" % basename, "w")
+
+        inf_file.writelines(" Data file name without suffix           =  %s\n" % basename)
+        inf_file.writelines(" Telescope used                            =  Arecibo\n")
+        inf_file.writelines(" Instrument used                           =  PSPM\n")
+        inf_file.writelines(" Object being observed                    =  %s\n" % (source_name))
+        inf_file.writelines(" J2000 Right Ascension (hh:mm:ss.ssss)  =  %s\n" % RAJ)
+        inf_file.writelines(" J2000 Declination     (dd:mm:ss.ssss)  =  %s\n" % DECJ)
+        inf_file.writelines(" Data observed by                          =  unset\n")
+        inf_file.writelines(" Epoch of observation (MJD)              =  %.25f\n" % np.float(Tstart))
+        inf_file.writelines(" Barycentered?            (1 yes, 0 no)  =  1\n")
+        inf_file.writelines(" Number of bins in the time series      =  %d\n" % Nsamples)
+        inf_file.writelines(" Width of each time series bin (sec)    =  %.18f\n" % dt)
+        inf_file.writelines(" Any breaks in the data? (1 yes, 0 no)  =  0\n")
+        inf_file.writelines(" Type of observation (EM band)           =  Radio\n")
+        inf_file.writelines(" Beam diameter (arcsec)                   =  855\n")
+        inf_file.writelines(" Dispersion measure (cm-3 pc)            =  %f\n" % np.float(DM))
+        inf_file.writelines(" Central freq of low channel (MHz)      =  1400\n")
+        inf_file.writelines(" Total bandwidth (MHz)                    =  0.124\n")
+        inf_file.writelines(" Number of channels                        =  2\n")
+        inf_file.writelines(" Channel bandwidth (MHz)                  =  0.062\n")
+        inf_file.writelines(" Data analyzed by                          =  ridolfi\n")
+        inf_file.writelines(" Any additional notes:\n")
+        inf_file.writelines("    Project ID unset, Date: 2014-08-31T00:00:00.\n")
+        inf_file.writelines("    2 polns were summed.  Samples have 32 bits.\n")
+        inf_file.writelines("\n")
+        inf_file.writelines("\n")
+        inf_file.close()
+
+
+def multiprocessing_roemer_circular(x_lts, array_M_frac, queue_object, id_num):
+        queue_object.put([{'data': x_lts * (np.sin(array_M_frac * (2*np.pi))), 'id_num': id_num}])
+
+
+def deconvolve_binary_signal_circular_orbit(t, y, Pb_s, x_p_lts, T0, Tstart, q, ncpus=1, list_components_to_demodulate=['pulsar', 'companion']):
+        """
+         Takes a signal coming from a pulsar in a CIRCULAR binary system and deconvolves it for the companion orbit
+
+         Parameters:
+            t           = array with the times of the samples (seconds)
+            y           = array with the signal samples (arbitrary units)            
+            Pb_s        = the orbital period of the binary system (seconds)
+            x_p_lts    = projected semi-major axis of the orbit (s)
+            T0          = epoch of the passage at the periastron of both objects
+            gamma_p_s  = Einstein delay for the pulsar
+            gamma_c_s  = Einstein delay for the companion
+            dR          = First relativistic deformation of orbit
+            dTheta     = Second relativistic deformation of orbit   
+            q           = mass ratio
+        """
+        N_orbits = (1./Pb_s) * ((Tstart - T0)*86400)
+        array_M_frac_p = np.modf(t/Pb_s)[0]
+        
+        list_ts_deconvolved_c = []
+        
+        if ncpus > 1:
+                my_queue = multiprocessing.Queue()
+                my_processes = []
+                list_result_program = []
+                list_arrays_M_frac_p = []
+                N_samples_tot = len(array_M_frac_p)
+                N_samples_per_cpu = int(N_samples_tot / ncpus)
+                
+                for n in range(ncpus+1):  # the last array in the list will be shorter than the others
+                        list_arrays_M_frac_p.append(array_M_frac_p[n*N_samples_per_cpu:(n+1)*N_samples_per_cpu])
+                        
+                for n in range(ncpus):
+                        my_processes.append(multiprocessing.Process(target=multiprocessing_roemer_circular, args=(
+                        x_p_lts, list_arrays_M_frac_p[n], my_queue, n)))
+                for p in my_processes:
+                        p.start()
+                        time.sleep(0.01)
+                        
+                for i in range(len(my_processes)):
+                        list_result_program += my_queue.get(block=True)
+
+                list_result_program_sorted = sorted(list_result_program, key=lambda k: k['id_num'], reverse=False)
+                list_arrays = [list_result_program_sorted[k]['data']  for k in range(len(list_result_program_sorted))]
+                array_roemer_delays_p = np.concatenate(list_arrays)
+
+        else:
+                array_roemer_delays_p = x_p_lts * (np.sin(array_M_frac_p * (2*np.pi)))
+
+        N_samples_deconv = len(array_roemer_delays_p)
+
+        if 'pulsar' in list_components_to_demodulate:
+                ts_deconvolved_p = t[:N_samples_deconv] - array_roemer_delays_p
+        else:
+                ts_deconvolved_p = []
+                
+        if 'companion' in list_components_to_demodulate:
+                for x in range(len(list_q)):
+                        q = list_q[x]
+                        print("x = %d  --> % q = %7.5f" % (q))
+                        array_roemer_delays_c = - array_roemer_delays_p * q
+                        list_ts_deconvolved_c[i] = t[:N_samples_deconv] - array_roemer_delays_c
+        else:
+                list_ts_deconvolved_c = []
+
+        return list_ts_deconvolved_c, ts_deconvolved_p, y
+
+
+def deconvolve_binary_signal_eccentric_orbit_FAST(t, y, Pb_s, x_p_lts, omega_p, ecc, T0, Mp_g, gamma_p_s, dR, dTheta, Shapiro_Range_p, Shapiro_Shape, Tstart, list_q, ncpus=1, list_components_to_demodulate=['pulsar', 'companion']):
+        N_orbits = (1./Pb_s) * ((Tstart - T0)*86400)
+        
+        array_M_frac_p = np.modf(t/Pb_s)[0]
+        
+        my_queue = multiprocessing.Queue()
+        my_processes = []
+        list_result_program = []
+        list_arrays_M_frac_p = []
+        N_samples_tot = len(array_M_frac_p)
+        N_samples_per_cpu = int(N_samples_tot / ncpus)
+        
+        for n in range(ncpus+1):  # the last array in the list will be shorter than the others
+                list_arrays_M_frac_p.append(array_M_frac_p[n*N_samples_per_cpu:(n+1)*N_samples_per_cpu])
+                
+        for n in range(ncpus):
+                my_processes.append(multiprocessing.Process(target=multiprocessing_mean_to_true_anomaly_FRAC, args=(ecc, list_arrays_M_frac_p[n], my_queue, n)))
+        for p in my_processes:
+                p.start()
+                time.sleep(0.01)
+                 
+        for i in range(len(my_processes)):
+                list_result_program += my_queue.get(block=True)
+
+        list_result_program_sorted = sorted(
+                list_result_program, key=lambda k: k['id_num'], reverse=False)
+        list_arrays = [list_result_program_sorted[k]['data']   for k in range(len(list_result_program_sorted))]
+        
+        array_T_frac_p = np.concatenate(list_arrays)
+        
+        array_true_anomalies_p = array_T_frac_p * 2*np.pi
+        array_true_anomalies_c = copy.deepcopy(array_true_anomalies_p)
+        
+        array_eccentric_anomalies_p = np.array([true_to_eccentric_anomaly(ecc, x) for x in array_true_anomalies_p])
+        
+        N_points = len(array_eccentric_anomalies_p)
+        # print "%20s %20s %20s %20s" % ("N", "Mean Anomaly (frac)", "True Anomaly", "Eccentric Anomaly")
+        for j in range(N_points):
+                if j % 10000 == 1:
+                        print("%09d/%10s %.10f %.10f %.10f" % (j, N_points, array_M_frac_p[j], array_true_anomalies_p[j], array_eccentric_anomalies_p[j]))
+                        
+        array_Einstein_delays_p = gamma_p_s * np.sin(array_eccentric_anomalies_p)
+        
+        array_Shapiro_delays_p = - 2 * Shapiro_Range_p * np.log10(1 - ecc*np.cos(array_eccentric_anomalies_p) - Shapiro_Shape*(np.sin(omega_p)*(np.cos(array_eccentric_anomalies_p) - ecc) + np.sqrt(1 - ecc**2)*np.cos(omega_p)*np.sin(array_eccentric_anomalies_p)))
+
+        ecc_R = ecc * (1 + dR)
+        ecc_T = ecc * (1 + dTheta)
+        array_roemer_delays_p_classic = x_p_lts * (1 - np.power(ecc, 2.)) / (1. + ecc*np.cos(array_true_anomalies_p)) * np.sin(array_true_anomalies_p+omega_p)
+        # Eq. (8.36) Lorimer & Kramer 2004
+        array_roemer_delays_p = x_p_lts * (np.cos(array_eccentric_anomalies_p) - ecc_R)*np.sin(omega_p) + x_p_lts*np.sin(array_eccentric_anomalies_p)*np.sqrt(1 - ecc_T**2)*np.cos(omega_p)
+        N_samples_deconv = len(array_roemer_delays_p)
+
+        if 'pulsar' in list_components_to_demodulate:
+                ts_deconvolved_p = t[:N_samples_deconv] - array_roemer_delays_p - array_Einstein_delays_p - array_Shapiro_delays_p
+        else:
+                ts_deconvolved_p = []
+
+        return array_eccentric_anomalies_p, array_roemer_delays_p, ts_deconvolved_p, y
+
+
+def resample_signal(x, y, new_dt, numout):
+        # Check that the length of X and Y is the same, otherwise cut one of the two
+        dn = 0
+        if (len(x) > len(y)):
+                dn = len(x) - len(y)
+                x = x[:-dn]
+                print("len(x) = %d > len(y) = %d" % (len(x), len(y)))
+        elif (len(x) < len(y)):
+                dn = len(y) - len(x)
+                y = y[:-dn]
+                print("len(x) = %d < len(y) = %d" % (len(x), len(y)))
+        else:
+                #print("I passed!")
+                pass
+
+        old_dt = x[1] - x[0]
+
+        N_samples_demodulated_obs = len(x)
+        demodulated_obs_length_s = old_dt * N_samples_demodulated_obs
+        
+        requested_length_s = numout*new_dt
+        
+        x_new_min = np.amin(x)
+        x_new_max = np.amax(x)
+        
+        N_samples_diff = 0
+        N_samples_theory = int((x_new_max - x_new_min)/new_dt)
+        if verbosity_level >= 2:
+                print("The interpolation range is x=%.7f - %.7f" % (np.amin(x), np.amax(x)))
+        func = scipy.interpolate.interp1d(x, y)
+        if numout > 0:
+                print("OK, numout > 0:")
+                if requested_length_s > demodulated_obs_length_s:
+                        print("numout = > len(y)")
+
+                        time_series_mean = np.mean(y)
+                        time_series_std = np.std(y)
+                        N_samples_last_fraction = int(0.01*len(y))
+                        time_series_mean_last_fraction = np.mean(y[-N_samples_last_fraction:])
+
+                        N_samples_tot = N_samples_theory - (N_samples_theory % ncpus)
+                        N_samples_tot_old = len(x) - (len(x) % ncpus)
+                        N_samples_diff = numout - N_samples_tot
+                        
+                        y_white_noise = np.ones(N_samples_diff) * time_series_mean_last_fraction
+                else:
+                        print("numout <=0 len(y)")
+                        N_samples_tot = numout
+        else:
+
+                N_samples_tot = N_samples_theory - (N_samples_theory % ncpus)
+
+                
+        x_resampled = np.linspace(x_new_min, x_new_min + new_dt*(N_samples_tot-1), N_samples_tot)
+        # print "len(x_resampled) = ", len(x_resampled)
+        my_queue = multiprocessing.Queue()
+        my_processes = []
+        list_result_program = []
+        
+        N_samples_per_cpu = int(N_samples_tot / ncpus)
+        list_arrays_x_resampled = []
+        
+        for n in range(ncpus):  # the last array in the list will be shorter than the others
+                list_arrays_x_resampled.append(x_resampled[n*N_samples_per_cpu:(n+1)*N_samples_per_cpu])
+                if verbosity_level>=2:
+                        print("x_range CPU %03d:  %25.15f - %25.15f" % (n, list_arrays_x_resampled[n][0], list_arrays_x_resampled[n][-1]))
+
+        for n in range(ncpus):
+                my_processes.append(multiprocessing.Process(target=multiprocessing_interpolate, args=(func, list_arrays_x_resampled[n], my_queue, n)))
+        for p in my_processes:
+                p.start()
+                time.sleep(0.01)
+
+        for i in range(len(my_processes)):
+                list_result_program += my_queue.get(block=True)
+
+        list_result_program_sorted = sorted(list_result_program, key=lambda k: k['id_num'], reverse=False)
+        list_arrays = [list_result_program_sorted[k]['data']  for k in range(len(list_result_program_sorted))]
+
+        y_resampled = np.concatenate(list_arrays)
+
+        if N_samples_diff > 0:
+                x_resampled = np.concatenate([x_resampled, np.linspace(x_new_max, x_new_max + new_dt*(N_samples_diff-1), N_samples_diff)])
+                y_resampled = np.concatenate([y_resampled, y_white_noise])
+
+        return x_resampled, y_resampled
+
+
+def multiprocessing_interpolate(func_interpolate, array_xs_resampled, queue_object, id_num):
+        queue_object.put([{'data': func_interpolate(array_xs_resampled), 'id_num': id_num}])
+
+
+def convert_Pdot_into_F1(P, Pdot):
+        F1 = -Pdot / np.power(P, 2)
+        return F1
+
+
+########################################################################################################
+
+
+M_SUN_CGS = 1.989e33                         # Mass of the Sun in grams
+G = 6.67259e-8                      # Gravitational constant in CGS
+LIGHT_SPEED = 2.99792458e10                   # Speed of Light in cgs
+
+
+verbosity_level = 1
+flag_input_q = 0
+flag_comp_only = 0
+flag_pulsar_only = 0
+ncpus = 1
+list_q = []
+Mtot_g = 0
+Mp_g = 0
+gamma_p_s = 0
+gamma_c_s = 0
+numout = 0
+dt_s = 0
+outfile_basename = ""
+original_obs_length_s = 0
+requested_length_s = 0
+
+list_components_to_demodulate = ['pulsar', 'companion']
+
+output_angles_filename = ""
+input_angles_filename = ""
+
+string_version = "1.0-beta (15Feb2022)"
+if (len(sys.argv) == 1 or ("-h" in sys.argv) or ("-help" in sys.argv) or ("--help" in sys.argv)):
+        print("Usage1: %s [-Q / -V] -par <normal_parfile> -datfile <BARYCENTERED!!_time_series> [-dt 0.000070] [-numout N] [-ncpus N] [-Mp_Mc \"1.4,2.0\"] {-comp_only | -pulsar_only} [-o outfile_basename]" % (os.path.basename(sys.argv[0])))
+        print()
+        print("Output:  isol_<datfile_basename>_p.dat   ---> Demodulated orbit for the pulsar, useful to check whether the demodulation was done correctly")
+        print("          isol_<datfile_basename>_c.dat   ---> Demodulated orbit for the companion, which you may want to search")
+        print()
+        exit()
+elif (("-version" in sys.argv) or ("--version" in sys.argv)):
+        print("Version: %s" % (string_version))
+        exit()
+else:
+        for j in range(1, len(sys.argv)):
+                if (sys.argv[j] == "-par"):
+                        parfile = sys.argv[j+1]
+                elif (sys.argv[j] == "-datfile"):
+                        datfile = sys.argv[j+1]
+                elif (sys.argv[j] == "-ncpus"):
+                        ncpus = int(sys.argv[j+1])
+                elif (sys.argv[j] == "-Mp_Mc"):
+                        q_min, q_max, q_step = [np.float64(x)  for x in sys.argv[j+1].split(",")]
+                        list_q = np.arange(q_min, q_max+0.5*q_step, q_step)
+                        print("list_q = ", list_q)
+                        flag_input_q = 1
+                elif (sys.argv[j] == "-pulsar_only"):
+                        list_components_to_demodulate = ['pulsar']
+                elif (sys.argv[j] == "-comp_only"):
+                        list_components_to_demodulate = ['companion']
+                elif (sys.argv[j] == "-dt"):
+                        dt_s = np.float64(sys.argv[j+1])
+                elif (sys.argv[j] == "-numout"):
+                        numout = int(sys.argv[j+1])
+                        if numout % 2 != 0:
+                                print("ERROR: numout must be an even number!")
+                                exit()
+                elif (sys.argv[j] == "-o"):
+                        outfile_basename = sys.argv[j+1]
+                elif (sys.argv[j] == "-Q"):
+                        verbosity_level = 0
+                elif (sys.argv[j] == "-V"):
+                        verbosity_level = 2
+                        
+
+                        
+        f_basename = os.path.splitext(datfile)[0]
+        inffile = f_basename + ".inf"
+        datfile_fullpath = os.path.abspath(datfile)
+        inffile_fullpath = os.path.abspath(inffile)
+        source_name = get_command_output("grep Object %s" % (inffile_fullpath)).split("=")[1].strip()
+        dt = np.float64(get_command_output("grep Width %s" % (inffile_fullpath)).split("=")[1].strip())
+        Tstart = np.float64(get_command_output("grep Epoch %s" % (inffile_fullpath)).split("=")[1].strip())
+        N_samples_original = int(get_command_output("grep bins %s" % (inffile_fullpath)).split("=")[1].strip())
+        
+        original_obs_length_s = N_samples_original*dt
+        requested_length_s = numout*dt_s
+        
+        if verbosity_level >= 1:
+                print()
+                print("###############################             pysolator             #################################")
+                print("###############################         %16s         #################################" % (string_version))
+                print()
+
+        if ncpus > multiprocessing.cpu_count():
+                if verbosity_level >= 1:
+                        print()
+                        print("\033[1mWARNING\033[0m: This machine seems to have only %d logical CPUs, fewer than the CPU cores requested (%d). Will use %d cores, instead." % (multiprocessing.cpu_count(), ncpus, multiprocessing.cpu_count()))
+                        print()
+                        ncpus = multiprocessing.cpu_count()
+                        
+        if numout % ncpus != 0:
+                print("ERROR: numout must be a multiple of ncpus!")
+                exit()
+                
+        if verbosity_level >= 2:
+                print("Full command: %s" % (" ".join(sys.argv[:])))
+                print()
+                print("System info: detected %d CPU threads" %  (multiprocessing.cpu_count()))
+                print()
+        if verbosity_level >= 1:
+                print("%40s: %s" % ("Ephemeris file", parfile))
+                print("%40s: %s" % ("Barycentered Time Series file", datfile))
+                print()
+                print()
+                print("1) Acquiring Ephemeris...", end=' ')
+                sys.stdout.flush()
+        dict_parfile_pulsar = import_parfile(parfile)
+        if verbosity_level >= 1:
+                print("done!")
+        try:
+                pulsarname = dict_parfile_pulsar['PSR']
+        except:
+                pulsarname = dict_parfile_pulsar['PSRJ']
+
+
+        #print(dict_parfile_pulsar)
+        RAJ = dict_parfile_pulsar['RAJ']
+        DECJ = dict_parfile_pulsar['DECJ']
+        P = 1./np.float64(dict_parfile_pulsar['F0'])
+        DM = np.float64(dict_parfile_pulsar['DM'])
+        
+        try:
+                 T0 = np.float64(dict_parfile_pulsar['T0'])
+        except:
+                 T0 = np.float64(dict_parfile_pulsar['TASC'])
+
+        ####################################
+        # Acquire binary parameters
+        ####################################
+        try:
+                Pb_d_T0 = np.float64(dict_parfile_pulsar['PB'])
+                Pb_s_T0 = Pb_d_T0*86400
+        except:
+                Pb_s_T0 = 1./np.float64(dict_parfile_pulsar['FB0'])
+        Pb_s = Pb_s_T0
+
+        try:
+                Pb_s_dot = np.float64(dict_parfile_pulsar['PBDOT'])
+                if np.fabs(Pb_s_dot) > 1.0e-7:
+                        print("\033[1mWARNING\033[0m: |Pb_s_dot| > 1.0e-7   ----> probably a TEMPO1 ephemeris, hence I multiply this value by 1.0e-12")
+                        Pb_s_dot = Pb_s_dot*1.0e-12
+
+        except:
+                Pb_s_dot = 0
+        Pepoch = np.float64(dict_parfile_pulsar['PEPOCH'])
+
+        x_p_lts = np.float64(dict_parfile_pulsar['A1'])
+        
+        try:
+                ecc = np.float64(dict_parfile_pulsar['E'])
+        except:
+                ecc = np.float64(dict_parfile_pulsar['ECC'])
+
+        try:
+                Mtot = np.float64(dict_parfile_pulsar['MTOT'])
+        except:
+                Mtot = 0
+                
+        try:
+                Mc = np.float64(dict_parfile_pulsar['M2'])
+        except:
+                Mc = 0
+        Shapiro_Range_p = G * (Mc*M_SUN_CGS) / (LIGHT_SPEED**3)
+        
+        omega_T0 = np.float64(dict_parfile_pulsar['OM'])
+        
+        try:
+                omega_dot = np.float64(dict_parfile_pulsar['OMDOT'])  # deg/year
+        except:
+                omega_dot = 0  # deg/year
+                
+        try:
+                gamma_p_s = np.float64(dict_parfile_pulsar['GAMMA'])  # seconds
+        except:
+                gamma_p_s = 0  # seconds
+
+        try:
+                Shapiro_Shape = np.float64(dict_parfile_pulsar['SINI'])
+        except:
+                Shapiro_Shape = 0
+        inc_rad = np.arcsin(Shapiro_Shape)
+        
+        try:
+                dR = np.float64(dict_parfile_pulsar['DR'])
+                if dR > 1.0e-3:
+                        print("\033[1mWARNING\033[0m: dR = %.3e > 0.001, most likely because you are using a TEMPO1 ephemeris. I'll multiply it by 1.0e-6 --> new dR = %.4e " % (dR, dR * 1.0e-6))
+                        dR = dR * 1.0e-6
+        except:
+                dR = 0
+        try:
+                dTheta = np.float64(dict_parfile_pulsar['DTHETA'])
+                if dTheta > 1.0e-3:
+                        print("\033[1mWARNING\033[0m: dTheta = %.3e > 0.001, most likely because you are using a TEMPO1 ephemeris. I'll multiply it by 1.0e-6 --> new dTheta = %.4e " % (dTheta, dTheta * 1.0e-6))
+                        dTheta = dTheta * 1.0e-6
+        except:
+                dTheta = 0
+
+        try:
+                inc_rad = np.arcsin(np.float64(dict_parfile_pulsar['SINI']))
+                Mtot_g = np.float64(dict_parfile_pulsar['MTOT'])*M_SUN_CGS
+                Mc_g = np.float64(dict_parfile_pulsar['M2'])*M_SUN_CGS
+                Mp_g = Mtot_g - Mc_g
+                
+                a = np.power((np.power(Pb_s_T0, 2.)*G * (Mp_g+Mc_g) / (4*np.power(np.pi, 2.))),  1./3.) * np.sin(inc_rad)
+
+        except:
+                print("   \033[1mWARNING\033[0m: Could not infer the mass ratio (q = Mp/Mc) of the system from the ephemeris file (probably M2/MTOT/SINI parameters are missing). The companion orbit cannot be de-modulated.")
+                print("             However, you can always manually specify the mass ratio with the \"-Mp_Mc\" option.")
+                print()
+                list_components_to_demodulate = ['pulsar']
+        q_nominal = Mp_g/Mc_g
+        if len(list_q) == 0:
+                list_q = [q_nominal]
+
+        if verbosity_level >= 2:
+                print()
+                print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+                print("ACQUIRED FROM EPHEMERIS:")
+                print()
+                print("%60s  |  %11s = %27s" % ("Right Ascension", "RAJ", RAJ))
+                print("%60s  |  %11s = %27s" % ("Declination", "DECJ", DECJ))
+                print("%60s  |  %11s = %27.20f   s" % ("Period", "P", P))
+                print("%60s  |  %11s = %27.20f   MJD" % ("Reference Epoch", "PEPOCH", Pepoch))
+                print()
+                print("Binary Parameters (Keplerian):")
+                print("%60s = %27.20f days" % ("Orbital period (Pb)", Pb_s_T0/86400.))
+                print("%60s = %27.20f ls" %   ("Project semi-major axis of the pulsar orbit (A1)", x_p_lts))
+                print("%60s = %27.20f" % ("Epoch of Periastron (T0)", T0))
+                print("%60s = %27.20f" % ("Orbital Eccentricity (ECC)", ecc))
+                print("%60s = %27.20f deg" % ("Longitude of Periastron (OM)", omega_T0))
+                print()
+                # print "Binary Parameters (Post-Keplerian):"
+                print("%60s  |  %11s = %27.20f   deg/yr" %                      ("Rate of advance of periastron", "OMDOT", omega_dot))
+                print("%60s  |  %11s = %27.20e   s/s " %                      ("Orbital Period Derivative", "PBDOT", Pb_s_dot))
+                print("%60s  |  %11s = %27.20f   Msun" %                        ("Total Mass", "MTOT", Mtot/M_SUN_CGS))
+                print("%60s  |  %11s = %27.20f   Msun" %                      ("Companion Mass", "M2", Mc/M_SUN_CGS))
+                print("%60s  |  %11s = %27.20f " %                      ("Sine of the inclination", "SINI", inc_rad))
+                print("%60s  |  %11s = %27.20f " %                      ("Einstein delay of the pulsar", "GAMMA", gamma_p_s))
+                print("%60s  |  %11s = %27.20f " %                      ("First relativistic deformation of orbit", "DR", dR))
+                print("%60s  |  %11s = %27.20f " %                      ("Second relativistic deformation of orbit", "DTHETA", dTheta))
+                print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+
+        #x_c_lts = x_p_lts * q
+        a_p = x_p_lts*LIGHT_SPEED
+        #a_c = a_p * q
+        
+        if verbosity_level >= 2:
+                print()
+                print()
+                print("====================================================================")
+                print("DERIVED PARAMETERS:")
+                print()
+                print("%60s  |  %11s = %27.20f Msun" %     ("Companion mass", "Mc", Mc_g/M_SUN_CGS))
+                print("%60s  |  %11s = %27.20f Msun" %                         ("Pulsar mass", "Mp", Mp_g/M_SUN_CGS))
+                print("%60s  |  %11s = %27.20e lt-s" %                           ("Semi-major axis of the pulsar orbit", "a_p", a_p/LIGHT_SPEED))
+                print("%60s  |  %11s = %27.20e lt-s" %                         ("Semi-major axis of the companion orbit", "a_c", a_c/LIGHT_SPEED))
+                print("%60s  |  %11s = %27.20e lt-s" %                         ("Orbital separation", "a_p + a_c", a/LIGHT_SPEED))
+                print()
+
+        if requested_length_s > original_obs_length_s:
+                if verbosity_level >= 1:
+                        print("\033[1mWARNING\033[0m: The requested length of the output time series (%d*%.10f s = %.3f s) is greater than the length of the original time series (%.3f s)! I will pad with the mean of the last 1%% of the time series." % (numout, dt_s, requested_length_s, original_obs_length_s))
+                        sys.stdout.flush()
+
+
+string_demodulated_components = "\033[1m%s\033[0m" % (" & ".join(list_components_to_demodulate))
+t_processing_start = time.time()
+
+
+if output_angles_filename != "":
+        print("Writing angles to '%s'..." % (output_angles_filename), end=' ')
+        sys.stdout.flush()
+        output_angles(dt, Pb_s, x_p_lts, ecc, output_angles_filename, ncpus)
+        print("done!")
+        sys.stdout.flush()
+        exit()
+
+
+ts = np.array([], dtype='float32')
+
+ts_deconvolved_TOTAL_c = np.array([], dtype='float32')
+ys_deconvolved_TOTAL_c = np.array([], dtype='float32')
+ts_deconvolved_TOTAL_p = np.array([], dtype='float32')
+ys_deconvolved_TOTAL_p = np.array([], dtype='float32')
+
+
+if verbosity_level >= 1:
+        print("2) Acquiring Barycentered Time Series...", end=' ')
+        sys.stdout.flush()
+        
+
+ys = np.fromfile(datfile_fullpath, dtype=np.float32)
+if verbosity_level >= 1:
+        print("done!")
+        
+
+Pb_s_Tstart = Pb_s_T0 + Pb_s_dot*(Tstart - T0)*86400.
+
+# Calculate the value of the periastron longitude at the starting epoch of the observation
+delta_omega = omega_dot * (Tstart - T0)/365.25
+omega_p = (omega_T0 + delta_omega)*np.pi/180
+omega_c = omega_p + np.pi
+
+
+Fb_Hz_T0 = (1./Pb_s_T0)
+Fb_Hz_dot = convert_Pdot_into_F1(Pb_s_T0, Pb_s_dot)
+
+
+N_orbits_Tstart = Fb_Hz_T0 * ((Tstart - T0)*86400) + 0.5*Fb_Hz_dot*((Tstart - T0)*86400)**2
+# print "N_orbits_Tstart = %.10f" % (N_orbits_Tstart)
+
+
+if N_orbits_Tstart < 0:
+        N_orbits_Tstart = N_orbits_Tstart + np.fabs(int(N_orbits_Tstart)) + 1
+elif N_orbits_Tstart > 1:
+        N_orbits_Tstart = N_orbits_Tstart - int(N_orbits_Tstart)
+start_orbphase_M = np.modf(N_orbits_Tstart)[0]
+# print "Start orbphase (Mean Anomaly): %.5f" % (start_orbphase_M)
+
+t_start = start_orbphase_M*Pb_s_T0
+t_obs = dt*len(ys)
+t_end = t_start + t_obs
+
+ts = np.arange(t_start, t_end, dt, dtype=np.float64)
+
+end_orbphase_M = start_orbphase_M + (t_obs)/Pb_s_T0
+
+Tend = Tstart + (t_obs)/86400.
+
+
+if verbosity_level >= 2:
+        print()
+        print("Pb_s_dot_delay = %.2f seconds" % (- 0.5*(Pb_s_dot / np.power(Pb_s, 2)) * np.power((Tstart - T0)*86400, 2) * Pb_s))
+        
+        print("%15s = %27.20f deg" % ("inc_rad", inc_rad*180/np.pi))
+        print("%15s = %27.20f" % ("Tstart", Tstart))
+        print("%15s = %27.20f" % ("Pepoch", Pepoch))
+        print("%15s = %27.20f" % ("Pb_s_T0", Pb_s_T0))
+        print("%15s = %27.20f deg" % ("omega_T0", omega_T0))
+        print("%15s = %27.20f deg" % ("delta_omega", delta_omega))
+        print("%15s = %27.20f deg" % ("omega_p", omega_p*180./np.pi))
+        print("%15s = %27.20f ls" % ("A1", x_p_lts))
+        print("%15s = %27.20f ls" % ("a", a / LIGHT_SPEED))
+        print("%15s = %27.20f ls" % ("a_p", a_p / LIGHT_SPEED))
+        print()
+        print("---> Fractional Mean Anomaly of the first time sample = %.3f" % (N_orbits))
+        print()
+        print("%15s = %27.20f s" % ("dt", dt))
+        print("%15s = %27.20f s" % ("t_start", t_start))
+        print("%15s = %27.20f s" % ("t_end", t_end))
+
+
+#####################################################################
+#  3) DE-MODULATION
+#####################################################################
+if ecc > 0:
+        string_warning_compute_time = " (orbit is eccentric, this may take a while)"
+else:
+        string_warning_compute_time = ""
+        
+if ncpus > 1:
+        string_plural = "s"
+else:
+        string_plural = ""
+        
+        
+if 'companion' in list_components_to_demodulate:
+        string_mass_ratio_used = " (with q=Mp/Mc=%s)" % (",".join(["%7.5f" % x for x in list_q]))
+else:
+        string_mass_ratio_used = ""
+        #string_q_label = ""
+
+#print("Mp_g = ", Mp_g)
+
+if verbosity_level >= 1:
+        print("3) De-modulating the orbit of the %s%s using %d CPU%s%s..." % (string_demodulated_components, string_mass_ratio_used, ncpus, string_plural, string_warning_compute_time), end=' ')
+        sys.stdout.flush()
+time_deconvolution_start = time.time()
+if ecc > 0:
+        array_eccentric_anomalies_p, array_roemer_delays_p, ts_deconvolved_p, ys_deconvolved = deconvolve_binary_signal_eccentric_orbit_SUPERFAST(
+             ts, ys, Pb_s, x_p_lts, omega_p, ecc, T0, Mp_g, gamma_p_s, dR, dTheta, Shapiro_Range_p, Shapiro_Shape, Tstart, list_q, ncpus, list_components_to_demodulate)
+else:
+        ts_deconvolved_c, ts_deconvolved_p, ys_deconvolved = deconvolve_binary_signal_circular_orbit(ts, ys, Pb_s, x_p_lts, T0, Tstart, q, ncpus, list_components_to_demodulate)
+time_deconvolution_end = time.time()
+if verbosity_level >= 1:
+        print("done in %.2f seconds!" % (time_deconvolution_end - time_deconvolution_start))
+
+
+#####################################################################
+#  4) RESAMPLING
+#####################################################################
+time_resampling_start = time.time()
+
+if 'pulsar' in list_components_to_demodulate:
+        if verbosity_level >= 1:
+                print("4) Resampling the de-modulated time series of the %s..." %  (string_demodulated_components), end=' ')
+                sys.stdout.flush()
+        # print "ts_deconvolved_p = ", ts_deconvolved_p
+        if dt_s == 0:
+                dt_resampling_p = np.float64(("%.20f" % np.amin(np.fabs(np.diff(ts_deconvolved_p))))[:10])
+        else:
+                dt_resampling_p = dt_s
+        ts_deconvolved_resampled_p, ys_deconvolved_resampled_p = resample_signal(ts_deconvolved_p, ys_deconvolved, dt_resampling_p, numout)
+        Nsamples_p = len(ts_deconvolved_resampled_p)
+        if verbosity_level >= 2:
+                print("Making the time series with an even number of samples and converting to 32-bit data for the pulsar......", end=' ')
+                sys.stdout.flush()
+        time_even_start = time.time()
+        ys_deconvolved_resampled_p = np.array(make_with_even_number_of_samples(ys_deconvolved_resampled_p), dtype=np.float32)
+        time_even_end = time.time()
+        if verbosity_level >= 2:
+                print("done in %.2f seconds!" % (time_even_end - time_even_start))
+
+list_ys_deconvolved_resampled_c = []
+list_dt_resampling_c = []
+
+if verbosity_level >= 2:
+        print()
+        print("New dt_c = %.30f s" % dt_resampling_c)
+        print("New number of samples (Companion): %d" % Nsamples_c)
+        if flag_comp_only == 0:
+                print("New dt_p = %.30f s" % dt_resampling_p)
+                print("New number of samples (Pulsar): %d" % Nsamples_p)
+                print()
+
+time_resampling_end = time.time()
+if verbosity_level >= 1:
+        print("done in %.2f seconds!" % (time_resampling_end - time_resampling_start))
+
+
+#####################################################################
+#  5) WRITING OUR FILES
+#####################################################################
+if verbosity_level >= 1:
+        print("5) Writing out files for the %s..." % (string_demodulated_components), end=' ')
+        sys.stdout.flush()
+
+if 'pulsar' in list_components_to_demodulate:
+        outfile_basename = "isol_%s" % (f_basename)
+        Nsamples_p = len(ys_deconvolved_resampled_p)
+        ys_deconvolved_resampled_p.tofile("%s_p.dat" % (outfile_basename))
+        write_inf_file("%s_p" % outfile_basename, source_name, DM, Tstart, dt_resampling_p, Nsamples_p, RAJ, DECJ)
+
+t_processing_final = time.time()
+processing_time_s = t_processing_final - t_processing_start
+if verbosity_level >= 1:
+        print("done!")
+        print("\nTotal time taken: %.3f seconds \n" % (processing_time_s))
+
+
+parfile_comp_filename = os.path.splitext(parfile)[0] + "_q_%7.5f_comp.par" % (q_nominal)
+dict_parfile_comp = dict_parfile_pulsar
+
+if pulsarname.endswith("A"):
+        dict_parfile_comp['PSR'] = pulsarname[:-1] + "B"
+else:
+        dict_parfile_comp['PSR'] = pulsarname + "B"
+x_c_lts = q_nominal * x_p_lts
+dict_parfile_comp['A1'] = "%.20f" % (x_c_lts)
+dict_parfile_comp['OM'] = "%.20f" % ((omega_T0 + 180.) % 360.)
+if 'M2' in dict_parfile_comp:
+        dict_parfile_comp['M2'] = "%.20f" % (Mp_g/M_SUN_CGS)
+if 'SINI' in dict_parfile_comp:
+        dict_parfile_comp['SINI'] = "%.6f" % (np.sin(inc_rad))
+write_parfile_formatted(dict_parfile_comp, [], parfile_comp_filename)
+
+
+# Write the companion parfile with no orbit
+parfile_comp_noorb_filename = os.path.splitext(parfile)[0] + "_noorb.par"
+dict_parfile_comp_noorb = copy.deepcopy(dict_parfile_pulsar)
+for k in list(dict_parfile_comp_noorb.keys()):
+        if k in list_ordered_params_binary:
+                # In thoery you don't know the spin frequency of the companion
+                dict_parfile_comp_noorb.pop(k)
+write_parfile_formatted(dict_parfile_comp_noorb, [], parfile_comp_noorb_filename)
+
+
+print()
+print("DONE PULSAR!")
+###############################################################
+
+
+if 'companion' in list_components_to_demodulate:
+        print("NOW PROCESSING THE COMPANION")
+        print()
+        N_qs = len(list_q)
+        for k in range(N_qs):
+                q = list_q[k]
+                print("Processing q = %.7f (%4d/%d)..." % (q, k+1, N_qs), end=' ')
+                sys.stdout.flush()
+                array_roemer_delays_c = -q * array_roemer_delays_p
+                # print "FAST: q = %7.5f  --> array_roemer_delays_c[:5] = %s " % (q, " ".join(["%.7f" % (x) for x in array_roemer_delays_c[:5]]))
+
+	        #ecc_R_c = ecc * (1 + dR_c_s)
+                #ecc_T_c = ecc * (1 + dTheta_c)
+                #array_roemer_delays_p_classic = x_p_lts * (1 - np.power(ecc, 2.)) / (1. + ecc*np.cos(array_true_anomalies_p)) * np.sin(array_true_anomalies_p+omega_p)
+                
+	        # Eq. (8.36) Lorimer & Kramer 2004
+	        #array_roemer_delays_p = x_p_lts * (np.cos(array_eccentric_anomalies_p) - ecc_R)*np.sin(omega_p) + x_p_lts*np.sin(array_eccentric_anomalies_p)*np.sqrt(1 - ecc_T**2)*np.cos(omega_p)
+                
+                Mc_g = Mp_g / q
+                
+                #print("Mc = %.4f Msun" % (Mc_g/M_SUN_CGS))
+                #print("Mp = %.4f Msun" % (Mp_g/M_SUN_CGS))
+                
+                # switch the role of Mp and Mc
+                gamma_c_s = Einstein_delay(Mc_g/M_SUN_CGS, Mp_g/M_SUN_CGS, Pb_s, ecc)
+                #print("gamma_c_s = ", gamma_c_s)
+
+                dR_c_s     = calculate_relativistic_deformation_of_orbit_dR_in_seconds(Pb_d_T0, Mc_g/M_SUN_CGS, Mp_g/M_SUN_CGS)
+                dTheta_c_s = calculate_relativistic_deformation_of_orbit_dTheta_in_seconds(Pb_d_T0, Mc_g/M_SUN_CGS, Mp_g/M_SUN_CGS)
+                
+                
+                # Le anomalie eccentriche sono identiche per la pulsar e la compagna
+                array_eccentric_anomalies_c = array_eccentric_anomalies_p
+                
+                array_Einstein_delays_c = gamma_c_s * np.sin(array_eccentric_anomalies_c)
+
+                Shapiro_Range_c = Shapiro_Range_p * q
+                array_Shapiro_delays_c = - 2 * Shapiro_Range_c * np.log10(1 - ecc*np.cos(array_eccentric_anomalies_c) - Shapiro_Shape*(np.sin(omega_c)*(np.cos(array_eccentric_anomalies_c) - ecc) + np.sqrt(1 - ecc**2)*np.cos(omega_c)*np.sin(array_eccentric_anomalies_c)))
+                
+                N_samples_deconv = len(array_roemer_delays_p)
+                
+                ts_deconvolved_c = ts[:N_samples_deconv] - array_roemer_delays_c - array_Einstein_delays_c - array_Shapiro_delays_c
+
+                #print("FAST: q = %7.5f  --> ts_deconvolved_c[:5] = %s " % (q, " ".join(["%.7f" % (ii) for ii in ts_deconvolved_c[:5]])))
+                
+                print("resampling...", end=' ')
+                sys.stdout.flush()
+                time_resampling_comp_start = time.time()
+                
+                if dt_s == 0:
+                        dt_resampling_c = np.float64(("%.20f" % np.amin(np.fabs(np.diff(ts_deconvolved_c))))[:10])
+                else:
+                        dt_resampling_c = dt_s
+
+                ts_deconvolved_resampled_c, ys_deconvolved_resampled_c = resample_signal(ts_deconvolved_c, ys_deconvolved, dt_resampling_c, numout)
+                Nsamples_c = len(ts_deconvolved_resampled_c)
+                time_resampling_comp_end = time.time()
+
+                print("making even number...", end=' ')
+                sys.stdout.flush()
+                time_even_start = time.time()
+                ys_deconvolved_resampled_c = np.array(make_with_even_number_of_samples(ys_deconvolved_resampled_c), dtype=np.float32)
+                time_even_end = time.time()
+                if verbosity_level >= 2:
+                        print("done in %.2f seconds!" % (time_even_end - time_even_start))
+                        
+                        # print "q = %7.5f  --> ts[:5] = %s " % (q, " ".join(["%.7f" % (x) for x in ys_deconvolved_resampled_c[:5]]))
+
+                print("writing .inf file...", end=' ')
+                sys.stdout.flush()
+                
+                if N_qs < 10:
+                        string_q_label = "_%1dof%1d_q_%7.5f" % (k,N_qs,q)
+                elif N_qs >= 10:
+                        string_q_label = "_%02dof%02d_q_%7.5f" % (k,N_qs,q)
+                elif N_qs >= 100:
+                        string_q_label = "_%03dof%03d_q_%7.5f" % (k,N_qs,q)
+                elif N_qs >= 1000:
+                        string_q_label = "_%04dof%04d_q_%7.5f" % (k,N_qs,q)
+                        
+                outfile_basename = "isol_%s%s" % (f_basename, string_q_label)
+                
+                Nsamples_c = len(ys_deconvolved_resampled_c)
+                ys_deconvolved_resampled_c.tofile("%s_c.dat" % (outfile_basename))
+                write_inf_file("%s_c" % outfile_basename, source_name, DM, Tstart, dt_resampling_c, Nsamples_c, RAJ, DECJ)
+                
+                print("writing par files...", end=' ')
+                sys.stdout.flush()
+                parfile_comp_filename = os.path.splitext(parfile)[0] + string_q_label + "_comp.par"
+                dict_parfile_comp = dict_parfile_pulsar
+                
+                if pulsarname.endswith("A"):
+                        dict_parfile_comp['PSR'] = pulsarname[:-1] + "B"
+                else:
+                        dict_parfile_comp['PSR'] = pulsarname + "B"
+                x_c_lts = q * x_p_lts
+                dict_parfile_comp['A1'] = "%.20f" % (x_c_lts)
+                dict_parfile_comp['OM'] = "%.20f" % ((omega_T0 + 180.) % 360.)
+
+                if 'GAMMA' in dict_parfile_comp:
+                        dict_parfile_comp['GAMMA'] = gamma_c_s
+                if 'DR' in dict_parfile_comp:
+                        dict_parfile_comp['DR'] = dR_c_s
+
+                if 'DR' in dict_parfile_comp:
+                        dict_parfile_comp['DTHETA'] = dTheta_c_s
+
+                        
+                if 'M2' in dict_parfile_comp:
+                        dict_parfile_comp['M2'] = "%.20f" % (Mp_g/M_SUN_CGS)
+
+                if 'SINI' in dict_parfile_comp:
+                        dict_parfile_comp['SINI'] = "%.6f" % (np.sin(inc_rad))
+
+                write_parfile_formatted(dict_parfile_comp, [], parfile_comp_filename)
+                print("done!")
+
+t_processing_final2 = time.time()
+processing_time_s = t_processing_final2 - t_processing_start
+if verbosity_level >= 1:
+        print("done!")
+        print("\nTotal time taken: %.3f seconds \n" % (processing_time_s))
